@@ -153,4 +153,3 @@ if st.button("📈 Generar análisis"):
 
     if score >= 75:
         st.write("• Perfil de salud equilibrado")
-``
