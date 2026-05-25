@@ -1,85 +1,124 @@
 import streamlit as st
-import datetime
+import pandas as pd
 
 # CONFIGURACIÓN
-st.set_page_config(page_title="Para alguien especial 💖", layout="centered")
+st.set_page_config(
+    page_title="Health Dashboard",
+    layout="wide"
+)
 
-# ESTILO PERSONALIZADO (DISEÑO)
-st.markdown("""
-<style>
-body {
-    background-color: #0e1117;
-}
-h1 {
-    text-align: center;
-    color: #ff4b91;
-}
-</style>
-""", unsafe_allow_html=True)
+# TÍTULO PRINCIPAL
+st.title("📊 Health Monitoring Dashboard")
+st.markdown("Sistema de seguimiento de bienestar personal")
 
-# TITULO
-st.title("🌸 CuidaTuEnergía 🌸")
-st.write("✨ Una app pensada para tu bienestar ✨")
+st.markdown("---")
 
-# INPUT
-nombre = st.text_input("¿Cómo te llamas?")
+# SIDEBAR (PROFESIONAL)
+st.sidebar.header("Configuración de Usuario")
 
-# SLIDERS
-agua = st.slider("💧 Vasos de agua al día", 0, 10, 5)
-sueno = st.slider("💤 Horas de sueño", 0, 12, 7)
-ejercicio = st.slider("🏃 Minutos de ejercicio", 0, 120, 30)
-estres = st.slider("🧘 Nivel de estrés", 1, 10, 5)
+nombre = st.sidebar.text_input("Nombre del usuario")
+edad = st.sidebar.number_input("Edad", min_value=0, max_value=100, value=25)
 
-# BOTÓN
-if st.button("💖 Evaluar mi salud"):
-    
-    st.subheader(f"Resultados para {nombre}")
-    
-    puntos = 0
+st.sidebar.markdown("---")
+st.sidebar.info("Complete los datos para evaluar métricas")
+
+# ENTRADAS PRINCIPALES
+st.header("📥 Ingreso de Datos")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    agua = st.number_input("💧 Consumo de agua (vasos/día)", 0, 15, 5)
+    sueno = st.number_input("💤 Horas de sueño", 0, 12, 7)
+
+with col2:
+    ejercicio = st.number_input("🏃 Ejercicio (min/día)", 0, 180, 30)
+    estres = st.slider("🧘 Nivel de estrés", 1, 10, 5)
+
+st.markdown("---")
+
+# PROCESAMIENTO
+if st.button("📈 Generar análisis"):
+
+    # SCORING
+    score = 0
+    data = []
 
     if agua >= 6:
-        st.success("✅ Buena hidratación")
-        puntos += 1
+        estado_agua = "Óptimo"
+        score += 25
     else:
-        st.warning("⚠️ Toma más agua")
+        estado_agua = "Bajo"
 
     if sueno >= 7:
-        st.success("✅ Buen descanso")
-        puntos += 1
+        estado_sueno = "Óptimo"
+        score += 25
     else:
-        st.warning("⚠️ Trata de dormir más")
+        estado_sueno = "Insuficiente"
 
     if ejercicio >= 30:
-        st.success("✅ Buen nivel de actividad")
-        puntos += 1
+        estado_ejercicio = "Adecuado"
+        score += 25
     else:
-        st.warning("⚠️ Muévete un poco más")
+        estado_ejercicio = "Bajo"
 
     if estres <= 4:
-        st.success("✅ Nivel de estrés bajo")
-        puntos += 1
+        estado_estres = "Controlado"
+        score += 25
     else:
-        st.warning("⚠️ Date un momento para relajarte")
+        estado_estres = "Elevado"
 
-    # SCORE FINAL
+    # DATAFRAME (nivel pro)
+    df = pd.DataFrame({
+        "Variable": ["Agua", "Sueño", "Ejercicio", "Estrés"],
+        "Estado": [estado_agua, estado_sueno, estado_ejercicio, estado_estres],
+        "Valor": [agua, sueno, ejercicio, estres]
+    })
+
+    # RESULTADOS
+    st.header("📊 Resultados del Usuario")
+
+    st.write(f"**Usuario:** {nombre}")
+    st.write(f"**Edad:** {edad}")
+
+    st.dataframe(df, use_container_width=True)
+
+    # SCORE GENERAL
     st.markdown("---")
-    st.subheader("🌟 Resultado general")
+    st.subheader("🎯 Índice de Bienestar")
 
-    if puntos == 4:
-        st.success("💯 ¡Estás increíble!")
-    elif puntos >= 2:
-        st.info("😊 Vas por buen camino, sigue así")
+    st.metric(label="Puntuación total", value=f"{score}/100")
+
+    # INTERPRETACIÓN
+    if score >= 75:
+        st.success("Estado general: ÓPTIMO")
+    elif score >= 50:
+        st.warning("Estado general: MODERADO")
     else:
-        st.error("💤 ¡Es momento de cuidarte más!")
+        st.error("Estado general: BAJO")
 
-    # MENSAJE PRO
+    # GRÁFICA
     st.markdown("---")
-    fecha = datetime.date.today()
+    st.subheader("📈 Visualización")
 
-    if nombre != "":
-        st.info(f"💌 {nombre}, recuerda cuidarte… porque eres alguien muy especial ✨")
+    chart_data = pd.DataFrame({
+        "Valores": [agua, sueno, ejercicio, estres]
+    }, index=["Agua", "Sueño", "Ejercicio", "Estrés"])
 
-        st.success(f"""
-✨ Esta app fue hecha especialmente para ti 💖  
-📅 Fecha: {fecha}
-""")
+    st.bar_chart(chart_data)
+
+    # RECOMENDACIONES
+    st.markdown("---")
+    st.subheader("📌 Recomendaciones")
+
+    if agua < 6:
+        st.write("- Incrementar consumo de agua")
+    if sueno < 7:
+        st.write("- Mejorar hábitos de sueño")
+    if ejercicio < 30:
+        st.write("- Incrementar actividad física")
+    if estres > 4:
+        st.write("- Implementar técnicas de manejo de estrés")
+
+    if score >= 75:
+        st.write("✅ Mantener hábitos actuales")
