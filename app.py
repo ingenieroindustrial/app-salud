@@ -2,40 +2,63 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# CONFIG
+# CONFIGURACIÓN
 st.set_page_config(page_title="Health Analytics Dashboard", layout="wide")
 
-# 🎨 ESTILO PROFESIONAL (CLARO)
+# 🎨 ESTILO PROFESIONAL CLARO (CORREGIDO)
 st.markdown("""
 <style>
-body {
-    background-color: #f4f6fb;
-    color: #1f2937;
-}
 
+/* FONDO GENERAL */
 .stApp {
     background-color: #f4f6fb;
 }
 
-h1, h2, h3 {
-    color: #111827;
-    font-weight: 600;
+/* TEXTO GENERAL */
+html, body, [class*="css"] {
+    color: #111827 !important;
+    font-family: 'Segoe UI', sans-serif;
 }
 
+/* TITULOS */
+h1 {
+    color: #111827 !important;
+    font-weight: 700 !important;
+}
+h2, h3 {
+    color: #1f2937 !important;
+    font-weight: 600 !important;
+}
+
+/* SIDEBAR */
 [data-testid="stSidebar"] {
-    background-color: #ffffff;
+    background-color: #ffffff !important;
     border-right: 1px solid #e5e7eb;
 }
 
-.block-container {
-    padding-top: 2rem;
+/* INPUTS */
+input, .stNumberInput {
+    background-color: #ffffff !important;
 }
 
-.metric-container {
+/* BOTÓN */
+.stButton > button {
+    background-color: #6366f1;
+    color: white;
+    border-radius: 8px;
+    border: none;
+    padding: 10px 16px;
+}
+.stButton > button:hover {
+    background-color: #4f46e5;
+}
+
+/* TARJETAS KPI */
+div[data-testid="metric-container"] {
     background-color: #ffffff;
-    padding: 15px;
     border-radius: 10px;
-    box-shadow: 0px 2px 6px rgba(0,0,0,0.05);
+    padding: 15px;
+    box-shadow: 0px 2px 8px rgba(0,0,0,0.05);
 }
 
 </style>
@@ -80,27 +103,26 @@ if st.button("📈 Generar análisis"):
     score += 25 if ejercicio >= 30 else 0
     score += 25 if estres <= 4 else 0
 
-    # DATA
+    # DATAFRAME
     df = pd.DataFrame({
         "Variable": ["Agua", "Sueño", "Ejercicio", "Estrés"],
         "Valor": [agua, sueno, ejercicio, estres]
     })
 
-    st.subheader("📊 Dashboard")
+    st.subheader("📊 Dashboard de resultados")
 
     # KPIs
-    col1, col2, col3, col4 = st.columns(4)
-
-    col1.metric("Agua", agua)
-    col2.metric("Sueño", sueno)
-    col3.metric("Ejercicio", ejercicio)
-    col4.metric("Estrés", estres)
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric("💧 Agua", agua)
+    k2.metric("💤 Sueño", sueno)
+    k3.metric("🏃 Ejercicio", ejercicio)
+    k4.metric("🧘 Estrés", estres)
 
     st.markdown("---")
 
     # SCORE
     st.subheader("🎯 Índice de bienestar")
-    st.metric("Score", f"{score}/100")
+    st.metric("Score total", f"{score}/100")
 
     if score >= 75:
         st.success("Estado general: Óptimo")
@@ -115,7 +137,7 @@ if st.button("📈 Generar análisis"):
     col1, col2 = st.columns(2)
 
     with col1:
-        st.subheader("📊 Variables")
+        st.subheader("📊 Variables de salud")
 
         fig, ax = plt.subplots()
         ax.bar(df["Variable"], df["Valor"], color="#6366f1")
@@ -127,15 +149,19 @@ if st.button("📈 Generar análisis"):
         st.subheader("📈 Distribución")
 
         fig2, ax2 = plt.subplots()
-        ax2.pie(df["Valor"], labels=df["Variable"], autopct='%1.1f%%',
-                colors=["#6366f1", "#60a5fa", "#34d399", "#fbbf24"])
+        ax2.pie(
+            df["Valor"],
+            labels=df["Variable"],
+            autopct='%1.1f%%',
+            colors=["#6366f1", "#60a5fa", "#34d399", "#fbbf24"]
+        )
         fig2.patch.set_facecolor('#ffffff')
         st.pyplot(fig2)
 
     st.markdown("---")
 
     # TABLA
-    st.subheader("📋 Datos")
+    st.subheader("📋 Datos procesados")
     st.dataframe(df, use_container_width=True)
 
     # INSIGHTS
@@ -152,4 +178,4 @@ if st.button("📈 Generar análisis"):
         st.write("• Nivel de estrés elevado")
 
     if score >= 75:
-        st.write("• Perfil de salud equilibrado")
+        st.write("✅ Perfil de salud equilibrado")
