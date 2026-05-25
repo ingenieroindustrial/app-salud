@@ -5,17 +5,16 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime
 import hashlib
-import base64
 from scipy import stats
 import warnings
 warnings.filterwarnings('ignore')
 
 # ========================= CONFIGURACIÓN =========================
 st.set_page_config(
-    page_title="HealthAnalytics Pro | Plataforma Clínica", 
-    page_icon="📊", 
+    page_title="HealthAnalytics Pro | Plataforma Clínica",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -23,7 +22,6 @@ st.set_page_config(
 # ========================= ESTILOS CSS PROFESIONAL =========================
 st.markdown("""
 <style>
-    /* FUENTE Y FONDO */
     @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap');
     
     html, body, [class*="css"] {
@@ -34,7 +32,6 @@ st.markdown("""
         background: linear-gradient(135deg, #f5f7fc 0%, #eef2f9 100%);
     }
     
-    /* SIDEBAR MODERNA */
     [data-testid="stSidebar"] {
         background: rgba(255,255,255,0.95);
         backdrop-filter: blur(10px);
@@ -42,7 +39,6 @@ st.markdown("""
         box-shadow: 4px 0 20px rgba(0,0,0,0.02);
     }
     
-    /* TARJETAS GLASSMORPHISM */
     .glass-card {
         background: rgba(255,255,255,0.75);
         backdrop-filter: blur(12px);
@@ -58,7 +54,6 @@ st.markdown("""
         box-shadow: 0 12px 40px rgba(0,0,0,0.08);
     }
     
-    /* MÉTRICAS */
     .metric-pro {
         background: white;
         border-radius: 20px;
@@ -75,7 +70,6 @@ st.markdown("""
         -webkit-text-fill-color: transparent;
     }
     
-    /* BOTONES */
     .stButton > button {
         background: linear-gradient(90deg, #0f172a 0%, #1e293b 100%);
         color: white;
@@ -91,13 +85,6 @@ st.markdown("""
         box-shadow: 0 8px 20px rgba(0,0,0,0.1);
     }
     
-    /* TABLAS */
-    .dataframe {
-        border-radius: 16px;
-        overflow: hidden;
-    }
-    
-    /* CITAS CIENTÍFICAS */
     .ref-badge {
         background: #eef2ff;
         padding: 0.2rem 0.6rem;
@@ -118,7 +105,6 @@ st.markdown("""
 def init_db():
     conn = sqlite3.connect('health_pro.db')
     c = conn.cursor()
-    # Tabla de usuarios (perfil)
     c.execute('''CREATE TABLE IF NOT EXISTS users (
                     user_id TEXT PRIMARY KEY,
                     name TEXT,
@@ -126,14 +112,13 @@ def init_db():
                     gender TEXT,
                     created_at TIMESTAMP
                 )''')
-    # Tabla de mediciones históricas
     c.execute('''CREATE TABLE IF NOT EXISTS measurements (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id TEXT,
                     date TIMESTAMP,
                     water_glasses REAL,
                     sleep_hours REAL,
-                    exercise_mins REAL,
+                    exercise_mins INTEGER,
                     stress_level INTEGER,
                     weight_kg REAL,
                     systolic_bp INTEGER,
@@ -143,12 +128,11 @@ def init_db():
                     nutrition_score INTEGER,
                     FOREIGN KEY(user_id) REFERENCES users(user_id)
                 )''')
-    # Tabla de objetivos personalizados
     c.execute('''CREATE TABLE IF NOT EXISTS goals (
                     user_id TEXT PRIMARY KEY,
                     goal_water REAL,
                     goal_sleep REAL,
-                    goal_exercise REAL,
+                    goal_exercise INTEGER,
                     goal_stress INTEGER,
                     goal_weight REAL,
                     goal_steps INTEGER,
@@ -190,9 +174,12 @@ def get_goals(user_id):
     df = pd.read_sql_query("SELECT * FROM goals WHERE user_id = ?", conn, params=(user_id,))
     conn.close()
     if df.empty:
-        # Objetivos por defecto basados en OMS/ACSM
-        return {'water': 8, 'sleep': 8, 'exercise': 30, 'stress': 3, 'weight': 70, 'steps': 8000}
-    return df.iloc[0].to_dict()
+        # Objetivos por defecto (tipos consistentes: float o int)
+        return {'water': 8.0, 'sleep': 8.0, 'exercise': 30, 'stress': 3, 'weight': 70.0, 'steps': 8000}
+    row = df.iloc[0]
+    return {'water': float(row['goal_water']), 'sleep': float(row['goal_sleep']),
+            'exercise': int(row['goal_exercise']), 'stress': int(row['goal_stress']),
+            'weight': float(row['goal_weight']), 'steps': int(row['goal_steps'])}
 
 def save_goals(user_id, goals_dict):
     conn = sqlite3.connect('health_pro.db')
@@ -207,27 +194,25 @@ def save_goals(user_id, goals_dict):
 
 def calculate_wellness_score(row, goals):
     """Score multicomponente basado en evidencia científica (0-100)"""
-    score = 0
-    # Agua: basado en 35ml/kg (EFSA) para adulto 70kg ≈ 8 vasos
+    # Agua
     water_score = min(100, (row['water_glasses'] / goals['water']) * 100) if goals['water'] > 0 else 0
-    # Sueño: NSF rangos 7-9h ideal 8h
+    # Sueño (ideal 8h)
     sleep_score = 100 - min(100, abs(row['sleep_hours'] - 8) * 20)
-    # Ejercicio: 150 min/semana → 30 min/día (WHO)
+    # Ejercicio
     exercise_score = min(100, (row['exercise_mins'] / goals['exercise']) * 100) if goals['exercise'] > 0 else 0
-    # Estrés: escala 1-10, óptimo <=3
+    # Estrés (óptimo <=3)
     stress_score = max(0, 100 - (row['stress_level'] - 1) * 12.5)
-    # Nutrición: escala 0-10
+    # Nutrición
     nutrition_score = row['nutrition_score'] * 10
-    # Peso: % cerca del objetivo (rango saludable ±5%)
+    # Peso
     if goals['weight'] > 0:
         weight_diff_pct = abs(row['weight_kg'] - goals['weight']) / goals['weight']
         weight_score = max(0, 100 - weight_diff_pct * 200)
     else:
         weight_score = 0
-    # Pasos: objetivo 8000 (Lancet 2022)
+    # Pasos
     steps_score = min(100, (row['steps'] / goals['steps']) * 100) if goals['steps'] > 0 else 0
     
-    # Pesos asignados según impacto en mortalidad (estudios GHIS)
     weights = {'water': 0.10, 'sleep': 0.15, 'exercise': 0.25, 'stress': 0.20,
                'nutrition': 0.15, 'weight': 0.05, 'steps': 0.10}
     score = (water_score * weights['water'] +
@@ -240,7 +225,6 @@ def calculate_wellness_score(row, goals):
     return round(score, 1)
 
 def advanced_statistics(df, var_name):
-    """Estadísticas nivel PRO: tendencia, variabilidad, percentiles poblacionales"""
     if df.empty or len(df) < 2:
         return None
     values = df[var_name].dropna().values
@@ -249,14 +233,11 @@ def advanced_statistics(df, var_name):
     mean = np.mean(values)
     median = np.median(values)
     std = np.std(values)
-    cv = (std / mean) * 100 if mean != 0 else 0  # Coeficiente de variación
-    # Tendencia lineal
+    cv = (std / mean) * 100 if mean != 0 else 0
     x = np.arange(len(values))
     slope, intercept, r_value, p_value, std_err = stats.linregress(x, values)
-    trend = slope  # cambio por registro
-    # Percentil simulado por edad (basado en distribuciones NHANES)
-    percentiles = [10, 25, 50, 75, 90]
-    # Simulación de población normal con media=mean y std=std
+    trend = slope
+    # Percentil simulado
     simulated_pop = np.random.normal(mean, std, 1000)
     user_percentile = stats.percentileofscore(simulated_pop, values[-1])
     return {
@@ -270,7 +251,6 @@ def advanced_statistics(df, var_name):
     }
 
 def generate_scientific_insights(row, goals):
-    """Recomendaciones basadas en evidencia con citas DOI"""
     insights = []
     if row['water_glasses'] < goals['water']:
         insights.append("💧 **Hidratación insuficiente** · *EFSA Journal 2010;8(3):1461* · Aumentar a 35ml/kg/día reduce riesgo de litiasis y fatiga.")
@@ -291,19 +271,13 @@ def generate_scientific_insights(row, goals):
     return insights
 
 def cardiovascular_risk_score(row):
-    """Simplificación del score FRESCO (España) para riesgo a 10 años"""
     age = st.session_state.get('age', 40)
     sbp = row.get('systolic_bp', 120)
-    hdl = 50  # simulado, se podría agregar
-    smoke = 0  # no fumador por defecto
-    diabetes = 0
     risk = 0
     if age > 60: risk += 2
     elif age > 50: risk += 1
     if sbp > 140: risk += 2
     elif sbp > 130: risk += 1
-    if smoke: risk += 1
-    # Interpretación cualitativa
     if risk <= 1: return "Riesgo bajo (<5%)", "#10b981"
     elif risk <= 3: return "Riesgo moderado (5-10%)", "#f59e0b"
     else: return "Riesgo elevado (>10%)", "#ef4444"
@@ -313,7 +287,7 @@ with st.sidebar:
     st.image("https://img.icons8.com/fluency/96/health-chart.png", width=80)
     st.markdown("### 🩺 **Perfil Clínico**")
     name = st.text_input("Nombre completo", value="Paciente Demo")
-    age = st.number_input("Edad (años)", min_value=18, max_value=110, value=45)
+    age = st.number_input("Edad (años)", min_value=18, max_value=110, value=45, step=1)
     gender = st.selectbox("Sexo biológico", ["Femenino", "Masculino", "Otro"])
     user_id = hash_user(name, age)
     st.session_state['user_id'] = user_id
@@ -323,13 +297,14 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 🎯 **Objetivos terapéuticos**")
     goals = get_goals(user_id)
+    # Todos los number_input con tipos consistentes (float o int según corresponda)
     new_goals = {
-        'water': st.number_input("💧 Agua (vasos/día)", 4, 12, int(goals['water'])),
-        'sleep': st.number_input("😴 Sueño (horas)", 6, 10, float(goals['sleep'])),
-        'exercise': st.number_input("🏃 Ejercicio (min/día)", 0, 120, int(goals['exercise'])),
+        'water': st.number_input("💧 Agua (vasos/día)", 4.0, 12.0, float(goals['water']), step=0.5),
+        'sleep': st.number_input("😴 Sueño (horas)", 6.0, 10.0, float(goals['sleep']), step=0.5),
+        'exercise': st.number_input("🏃 Ejercicio (min/día)", 0, 120, int(goals['exercise']), step=5),
         'stress': st.slider("🧘 Estrés objetivo (1-10)", 1, 10, int(goals['stress'])),
-        'weight': st.number_input("⚖️ Peso objetivo (kg)", 40, 150, int(goals['weight'])),
-        'steps': st.number_input("👣 Pasos diarios objetivo", 2000, 15000, int(goals['steps']))
+        'weight': st.number_input("⚖️ Peso objetivo (kg)", 40.0, 150.0, float(goals['weight']), step=0.5),
+        'steps': st.number_input("👣 Pasos diarios objetivo", 2000, 15000, int(goals['steps']), step=500)
     }
     if st.button("💾 Guardar objetivos", use_container_width=True):
         save_goals(user_id, new_goals)
@@ -366,16 +341,16 @@ with tab1:
     with col1:
         water = st.number_input("💧 Vasos de agua (250ml)", 0.0, 15.0, 6.0, step=0.5)
         sleep = st.number_input("😴 Horas de sueño", 0.0, 12.0, 7.5, step=0.5)
-        exercise = st.number_input("🏃 Ejercicio (min)", 0, 180, 30)
+        exercise = st.number_input("🏃 Ejercicio (min)", 0, 180, 30, step=5)
     with col2:
         stress = st.slider("🧘 Nivel de estrés (1=mínimo, 10=máximo)", 1, 10, 4)
         weight = st.number_input("⚖️ Peso (kg)", 30.0, 200.0, 72.5, step=0.5)
         nutrition = st.slider("🥗 Calidad nutricional (0=pobre, 10=excelente)", 0, 10, 7)
     with col3:
-        sbp = st.number_input("❤️ Presión sistólica (mmHg)", 80, 200, 118)
-        dbp = st.number_input("💙 Presión diastólica (mmHg)", 50, 120, 76)
-        hr = st.number_input("💓 Frecuencia cardíaca (lpm)", 40, 150, 72)
-        steps = st.number_input("👣 Pasos diarios", 0, 30000, 7000)
+        sbp = st.number_input("❤️ Presión sistólica (mmHg)", 80, 200, 118, step=2)
+        dbp = st.number_input("💙 Presión diastólica (mmHg)", 50, 120, 76, step=2)
+        hr = st.number_input("💓 Frecuencia cardíaca (lpm)", 40, 150, 72, step=1)
+        steps = st.number_input("👣 Pasos diarios", 0, 30000, 7000, step=500)
     
     data_record = {
         'water': water, 'sleep': sleep, 'exercise': exercise, 'stress': stress,
@@ -388,7 +363,6 @@ with tab1:
         st.success("✅ Datos almacenados correctamente. El análisis se actualizará.")
         st.balloons()
     
-    # Score de bienestar instantáneo
     df_user = load_user_data(user_id)
     if not df_user.empty:
         last_row = df_user.iloc[-1]
@@ -423,7 +397,6 @@ with tab2:
                               template='plotly_white', title_text="Tendencias temporales")
             st.plotly_chart(fig, use_container_width=True)
         
-        # Tabla de histórico
         st.subheader("📋 Histórico de mediciones")
         st.dataframe(df_hist.sort_values('date', ascending=False).head(20).style.format({
             'water_glasses': '{:.1f}', 'sleep_hours': '{:.1f}', 'exercise_mins': '{:.0f}',
@@ -460,7 +433,6 @@ with tab3:
             col6.metric("📐 R²", stats_dict['r_cuadrado'])
             col7.metric("🎯 Percentil poblacional", f"{stats_dict['percentil_poblacional']}%")
         
-        # Matriz de correlación
         st.subheader("🔗 Matriz de correlación entre variables")
         numeric_cols = ['water_glasses', 'sleep_hours', 'exercise_mins', 'stress_level',
                         'weight_kg', 'systolic_bp', 'heart_rate', 'steps', 'nutrition_score']
@@ -469,7 +441,6 @@ with tab3:
                              title="Correlaciones de Pearson")
         st.plotly_chart(fig_corr, use_container_width=True)
         
-        # Análisis de consistencia
         st.subheader("🎯 Consistencia de hábitos")
         cv_list = []
         for var in numeric_cols:
@@ -494,7 +465,6 @@ with tab4:
         for insight in insights:
             st.markdown(f"- {insight}")
         
-        # Score de bienestar evolutivo
         st.subheader("📈 Evolución del Índice de Bienestar")
         df_insight['wellness_score'] = df_insight.apply(lambda row: calculate_wellness_score(row, goals), axis=1)
         fig_well = px.line(df_insight, x='date', y='wellness_score', markers=True,
@@ -502,7 +472,6 @@ with tab4:
         fig_well.update_layout(yaxis_range=[0,100])
         st.plotly_chart(fig_well, use_container_width=True)
         
-        # Alertas basadas en objetivos
         st.subheader("⚡ Alertas de desviación clínica")
         for var, goal_key in [('water_glasses', 'water'), ('sleep_hours', 'sleep'), ('exercise_mins', 'exercise'),
                               ('stress_level', 'stress'), ('weight_kg', 'weight'), ('steps', 'steps')]:
@@ -528,7 +497,6 @@ with tab5:
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
         st.subheader("📄 Informe ejecutivo personalizado")
         
-        # Métricas resumen
         last = df_report.iloc[-1]
         score = calculate_wellness_score(last, goals)
         risk_text, _ = cardiovascular_risk_score(last)
@@ -552,7 +520,6 @@ with tab5:
         
         #### 📈 Tendencias significativas  
         """
-        # Añadir tendencia de las 3 variables principales
         for var, label in [('water_glasses', 'Agua'), ('sleep_hours', 'Sueño'), ('exercise_mins', 'Ejercicio')]:
             if len(df_report) >= 3:
                 slope = advanced_statistics(df_report, var)['tendencia']
@@ -566,7 +533,6 @@ with tab5:
         """
         st.markdown(report_md)
         
-        # Botón de exportación CSV
         csv = df_report.to_csv(index=False).encode('utf-8')
         st.download_button("📥 Descargar histórico completo (CSV)", csv, f"health_report_{user_id}.csv", "text/csv", use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
