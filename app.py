@@ -15,17 +15,23 @@ from reportlab.lib.units import cm
 # ==========================================
 st.set_page_config(page_title="Mi Salud App", layout="centered")
 
-# Estilos CSS básicos para limpieza
 st.markdown("""
 <style>
     .main { background-color: #f9f9f9; }
     h1 { color: #1e3a8a; }
     .stButton > button { background-color: #1e3a8a; color: white; border-radius: 20px; }
+    .suggestion-box {
+        background-color: #e0f2fe;
+        border-left: 5px solid #0284c7;
+        padding: 10px;
+        border-radius: 10px;
+        margin: 10px 0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 st.title("💙 Mi Salud App")
-st.caption("Registra tus hábitos diarios y recibe un puntaje de bienestar")
+st.caption("Registra tus hábitos diarios y recibe un puntaje de bienestar con consejos útiles")
 
 # ==========================================
 # 2. BASE DE DATOS SQLITE
@@ -33,17 +39,14 @@ st.caption("Registra tus hábitos diarios y recibe un puntaje de bienestar")
 DB_NAME = "salud.db"
 
 def init_db():
-    """Crea las tablas si no existen"""
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    # Tabla de usuarios (solo uno para simplificar, pero con nombre)
     c.execute('''CREATE TABLE IF NOT EXISTS usuarios (
                     id INTEGER PRIMARY KEY,
                     nombre TEXT,
                     edad INTEGER,
                     creado TIMESTAMP
                 )''')
-    # Tabla de mediciones diarias
     c.execute('''CREATE TABLE IF NOT EXISTS mediciones (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     usuario_id INTEGER,
@@ -51,8 +54,7 @@ def init_db():
                     agua_vasos REAL,
                     sueno_horas REAL,
                     ejercicio_min INTEGER,
-                    estres_nivel INTEGER,
-                    FOREIGN KEY(usuario_id) REFERENCES usuarios(id)
+                    estres_nivel INTEGER
                 )''')
     conn.commit()
     conn.close()
@@ -60,10 +62,8 @@ def init_db():
 init_db()
 
 def guardar_usuario(nombre, edad):
-    """Guarda o actualiza el usuario (solo uno activo)"""
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
-    # Eliminar usuarios anteriores (para mantener solo uno en este ejemplo)
     c.execute("DELETE FROM usuarios")
     c.execute("INSERT INTO usuarios (nombre, edad, creado) VALUES (?, ?, ?)",
               (nombre, edad, datetime.now()))
@@ -71,7 +71,6 @@ def guardar_usuario(nombre, edad):
     conn.close()
 
 def obtener_usuario():
-    """Obtiene el usuario actual (el primero)"""
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     c.execute("SELECT id, nombre, edad FROM usuarios LIMIT 1")
@@ -100,23 +99,52 @@ def cargar_mediciones(usuario_id):
     return df
 
 # ==========================================
-# 3. LÓGICA DE CÁLCULO (SENCILLA)
+# 3. LÓGICA DE CÁLCULO Y SUGERENCIAS
 # ==========================================
 def calcular_wellness_score(agua, sueno, ejercicio, estres):
-    """
-    Score 0-100 basado en metas simples:
-    - Agua: 8 vasos al día (máx 100% si alcanza 8)
-    - Sueño: 8 horas (máx 100% si alcanza 8)
-    - Ejercicio: 30 minutos (máx 100% si alcanza 30)
-    - Estrés: escala 1-10, se invierte: (10 - estres) / 9 * 100
-    """
     score_agua = min(100, (agua / 8) * 100)
     score_sueno = min(100, (sueno / 8) * 100)
     score_ejercicio = min(100, (ejercicio / 30) * 100)
-    score_estres = max(0, (10 - estres) / 9 * 100)  # si estrés=1 da 100, si=10 da 0
-    # Promedio simple
-    score = (score_agua + score_sueno + score_ejercicio + score_estres) / 4
-    return round(score, 1)
+    score_estres = max(0, (10 - estres) / 9 * 100)
+    return round((score_agua + score_sueno + score_ejercicio + score_estres) / 4, 1)
+
+def obtener_sugerencias(ultima_medicion):
+    """Genera recomendaciones simples basadas en la última medición"""
+    sugerencias = []
+    agua = ultima_medicion['agua_vasos']
+    sueno = ultima_medicion['sueno_horas']
+    ejercicio = ultima_medicion['ejercicio_min']
+    estres = ultima_medicion['estres_nivel']
+    
+    if agua < 6:
+        sugerencias.append("💧 Bebe más agua (intenta llegar a 8 vasos al día). Una buena hidratación mejora la energía y concentración.")
+    elif agua >= 6 and agua < 8:
+        sugerencias.append("💧 Vas bien con el agua, pero aún puedes aumentar un poco más. ¡Recuerda que 8 vasos es la meta!")
+    else:
+        sugerencias.append("💧 ¡Excelente hidratación! Sigue así.")
+    
+    if sueno < 6:
+        sugerencias.append("😴 Duermes poco. Intenta dormir al menos 7 horas para que tu cuerpo se recupere.")
+    elif sueno >= 6 and sueno < 8:
+        sugerencias.append("😴 Tu sueño está cerca de lo recomendado. Intenta llegar a 8 horas para sentirte más descansado/a.")
+    else:
+        sugerencias.append("😴 ¡Buen hábito! Dormir bien es clave para la salud mental y física.")
+    
+    if ejercicio < 20:
+        sugerencias.append("🏃 Intenta realizar al menos 30 minutos de ejercicio diario (caminar, bailar, o algún deporte).")
+    elif ejercicio < 30:
+        sugerencias.append("🏃 Buen nivel de actividad, pero puedes llegar a 30 minutos fácilmente. ¡Un poco más cada día!")
+    else:
+        sugerencias.append("🏃 ¡Fantástico! Cumples con la recomendación de ejercicio diario.")
+    
+    if estres > 7:
+        sugerencias.append("🧘 Tu nivel de estrés es alto. Prueba respirar profundamente o dar un paseo al aire libre.")
+    elif estres > 4:
+        sugerencias.append("🧘 Tu estrés es moderado. Dedica 5 minutos al día para relajarte o escuchar música.")
+    else:
+        sugerencias.append("🧘 Manejas bien el estrés. Sigue practicando actividades que te gusten.")
+    
+    return sugerencias
 
 # ==========================================
 # 4. INTERFAZ DE STREAMLIT
@@ -158,14 +186,24 @@ df = cargar_mediciones(usuario["id"])
 if df.empty:
     st.info("Aún no hay registros. Usa el formulario para agregar tu primera medición.")
 else:
-    st.subheader("📊 Historial de bienestar")
-    # Calcular score para cada registro
+    # Calcular score
     df["score"] = df.apply(lambda row: calcular_wellness_score(
         row["agua_vasos"], row["sueno_horas"], row["ejercicio_min"], row["estres_nivel"]), axis=1)
     
-    # Último registro
     ultimo = df.iloc[-1]
-    st.metric("🏆 Puntaje de bienestar de hoy", f"{ultimo['score']}/100")
+    
+    st.subheader("📊 Tu estado actual")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("🏆 Puntaje de bienestar de hoy", f"{ultimo['score']}/100")
+    with col2:
+        st.metric("📅 Última medición", ultimo['fecha'].strftime("%d/%m/%Y"))
+    
+    # Mostrar sugerencias personalizadas
+    sugerencias = obtener_sugerencias(ultimo)
+    st.markdown("### 💡 Consejos para mejorar")
+    for sug in sugerencias:
+        st.markdown(f'<div class="suggestion-box">{sug}</div>', unsafe_allow_html=True)
     
     # Gráfico de evolución del score
     fig = px.line(df, x="fecha", y="score", markers=True,
@@ -182,14 +220,12 @@ else:
         })
         st.dataframe(tabla.sort_values("Fecha", ascending=False), use_container_width=True)
 
-# --- Generar informe PDF ---
+# --- Generar informe PDF (incluye sugerencias) ---
 st.subheader("📄 Descargar informe PDF")
 if st.button("Generar informe con los últimos datos"):
-    # Tomar los 5 últimos registros o todos si hay menos
     ultimos = df.tail(5).copy()
     ultimos["fecha_str"] = ultimos["fecha"].dt.strftime("%d/%m/%Y")
     
-    # Crear PDF en memoria
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=2*cm, rightMargin=2*cm, topMargin=2*cm)
     styles = getSampleStyleSheet()
@@ -225,29 +261,17 @@ if st.button("Generar informe con los últimos datos"):
     story.append(tabla_ult)
     story.append(Spacer(1, 0.5*cm))
     
-    # Resumen simple (promedios de los últimos 5)
-    story.append(Paragraph("<b>Resumen de últimos registros</b>", styles['Heading2']))
-    promedio_score = ultimos["score"].mean()
-    story.append(Paragraph(f"Promedio de bienestar (últimos días): {promedio_score:.1f}/100", normal_style))
-    story.append(Spacer(1, 0.3*cm))
-    
-    # Recomendaciones básicas según el último registro
-    recomendaciones = []
-    if ultimo_reg['agua_vasos'] < 8:
-        recomendaciones.append("• Aumenta el consumo de agua a 8 vasos diarios.")
-    if ultimo_reg['sueno_horas'] < 7:
-        recomendaciones.append("• Intenta dormir al menos 7 horas cada noche.")
-    if ultimo_reg['ejercicio_min'] < 30:
-        recomendaciones.append("• Realiza al menos 30 minutos de ejercicio diario.")
-    if ultimo_reg['estres_nivel'] > 6:
-        recomendaciones.append("• Practica técnicas de relajación para reducir el estrés.")
-    if not recomendaciones:
-        recomendaciones.append("• ¡Excelente! Sigue manteniendo estos hábitos saludables.")
-    
-    story.append(Paragraph("<b>Recomendaciones</b>", styles['Heading2']))
-    for rec in recomendaciones:
-        story.append(Paragraph(rec, normal_style))
+    # Sugerencias personalizadas (iguales a las de la app)
+    story.append(Paragraph("<b>Recomendaciones según tu último registro</b>", styles['Heading2']))
+    for sug in sugerencias:
+        # Limpiar emojis para reportlab (funciona pero los muestra como texto)
+        story.append(Paragraph(sug, normal_style))
         story.append(Spacer(1, 0.2*cm))
+    
+    # Resumen simple
+    story.append(Paragraph("<b>Resumen de los últimos días</b>", styles['Heading2']))
+    promedio_score = ultimos["score"].mean()
+    story.append(Paragraph(f"Promedio de bienestar: {promedio_score:.1f}/100", normal_style))
     
     doc.build(story)
     buffer.seek(0)
