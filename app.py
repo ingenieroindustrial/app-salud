@@ -123,3 +123,12 @@ if st.button("📈 Ejecutar análisis"):
 
     if agua < 6:
         st.write("🔎 Hidratación por debajo del nivel recomendado")
+    if sueno < 7:
+        st.write("🔎 Déficit de sueño detectado")
+    if ejercicio < 30:
+        st.write("🔎 Nivel bajo de actividad física")
+    if estres > 4:
+        st.write("🔎 Nivel de estrés elevado")
+
+    if score >= 75:
+        st.write("✅ Perfil de salud equilibrado")
